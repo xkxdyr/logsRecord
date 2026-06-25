@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LogVerse · 智能日志宇宙 - AI驱动的实时日志分析平台</title>
+    <meta name="description" content="LogVerse 是一款AI驱动的智能日志分析平台，支持实时日志流、全文检索、预测性告警和可视化分析，帮助开发者快速定位问题。" />
+    <meta name="keywords" content="日志分析,日志管理,实时日志,AI日志,日志监控,DevOps,运维工具" />
+    <meta name="author" content="LogVerse Team" />
+    <meta name="theme-color" content="#0a0a0f" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+    <meta property="og:title" content="LogVerse · 智能日志宇宙" />
+    <meta property="og:description" content="AI驱动的实时日志分析平台，支持实时日志流、全文检索、预测性告警和可视化分析" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://logverse.example.com/og-image.png" />
+    <meta property="og:url" content="https://logverse.example.com" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="LogVerse · 智能日志宇宙" />
+    <meta name="twitter:description" content="AI驱动的实时日志分析平台" />
+    <meta name="twitter:image" content="https://logverse.example.com/og-image.png" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module">
+      if (import.meta.hot?.on) {
+        import.meta.hot.on('vite:error', (error) => {
+          if (error.err) {
+            console.error(
+              [error.err.message, error.err.frame].filter(Boolean).join('\n'),
+            )
+          }
+        })
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

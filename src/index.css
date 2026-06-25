@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #0a0a0b;
+  color: #e4e4e7;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0f0f11;
+}
+::-webkit-scrollbar-thumb {
+  background: #2e2e35;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a42;
+}
+
+/* 选中文本 */
+::selection {
+  background: rgba(245, 166, 35, 0.3);
+  color: #fff;
+}
+
+@layer components {
+  /* 面板基础样式 */
+  .panel {
+    @apply bg-base-700 border border-base-500 rounded-xl;
+  }
+  .panel-hover {
+    @apply transition-all duration-200 hover:border-base-400 hover:bg-base-600;
+  }
+  /* 微光边框 */
+  .glow-border {
+    box-shadow: 0 0 0 1px rgba(245, 166, 35, 0.15), 0 0 20px rgba(245, 166, 35, 0.05);
+  }
+  /* 级别色条 */
+  .level-bar {
+    @apply w-1 rounded-full shrink-0;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  /* 网格背景纹理 */
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  /* 径向渐变光晕 */
+  .bg-radial-amber {
+    background: radial-gradient(circle at 50% 0%, rgba(245, 166, 35, 0.08), transparent 60%);
+  }
+}
