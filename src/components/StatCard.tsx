@@ -49,7 +49,7 @@ export function StatCard({ label, value, icon, trend, accent = "amber", subtitle
             {trend >= 0 ? "+" : ""}
             {trend}%
           </span>
-          <span className="text-xs text-zinc-600">vs 上1h</span>
+          <span className="text-xs text-zinc-400">vs 上1h</span>
         </div>
       )}
     </div>

@@ -27,7 +27,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:1001',
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {
@@ -43,7 +43,7 @@ export default defineConfig({
         },
       },
       '/ws': {
-        target: 'ws://localhost:3001',
+        target: 'ws://localhost:1001',
         ws: true,
         changeOrigin: true,
         secure: false,

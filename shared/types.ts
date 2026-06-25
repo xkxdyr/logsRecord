@@ -99,21 +99,21 @@ export const TIER_CONFIGS: Record<KeyTier, TierConfig> = {
     label: "免费版",
     rateLimitPerMin: 100,
     dailyQuota: 10000,
-    features: ["实时日志流", "7天保留", "基础检索"],
+    features: ["实时日志流", "全局保留策略", "基础检索"],
   },
   pro: {
     tier: "pro",
     label: "专业版",
     rateLimitPerMin: 1000,
     dailyQuota: 200000,
-    features: ["实时日志流", "30天保留", "全文检索", "告警规则", "API 调用"],
+    features: ["实时日志流", "全局保留策略", "全文检索", "告警规则", "API 调用"],
   },
   enterprise: {
     tier: "enterprise",
     label: "企业版",
     rateLimitPerMin: 0,
     dailyQuota: 0,
-    features: ["无限接入", "365天保留", "高级检索", "告警规则", "API 调用", "专属支持"],
+    features: ["无限接入", "全局保留策略", "高级检索", "告警规则", "API 调用", "专属支持"],
   },
 };
 

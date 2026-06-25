@@ -1,5 +1,5 @@
 import { Component, type ReactNode, type ErrorInfo } from "react";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw, Home } from "lucide-react";
 
 interface Props {
   children: ReactNode;
@@ -34,13 +34,23 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="mb-6 text-zinc-500">
             {this.state.error?.message || "未知错误"}
           </p>
-          <button
-            onClick={() => this.setState({ hasError: false, error: undefined })}
-            className="flex items-center gap-2 rounded-lg bg-amber px-4 py-2.5 text-sm font-medium text-base-900 transition-colors hover:bg-amber/90"
-          >
-            <RefreshCw className="h-4 w-4" />
-            刷新重试
-          </button>
+          {/* P1-9: 提供两个动作 - 返回首页（避免同 URL 再崩溃）+ 刷新重试 */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.location.assign("/")}
+              className="flex items-center gap-2 rounded-lg bg-amber px-4 py-2.5 text-sm font-medium text-base-900 transition-colors hover:bg-amber/90"
+            >
+              <Home className="h-4 w-4" />
+              返回首页
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-2 rounded-lg border border-base-500 bg-base-700 px-4 py-2.5 text-sm text-zinc-300 transition-colors hover:border-base-400 hover:text-white"
+            >
+              <RefreshCw className="h-4 w-4" />
+              刷新重试
+            </button>
+          </div>
         </div>
       );
     }

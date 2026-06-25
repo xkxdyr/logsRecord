@@ -20,9 +20,53 @@ const WINDOW_MS = 60_000; // 1 分钟
 // 日配额：内存计数 { `${apiKey}:${dateKey}`: count }
 const quotaCounters = new Map<string, number>();
 
+// 清理周期
+const CLEANUP_INTERVAL_MS = 5 * 60_000; // 每 5 分钟清理一次
+let lastCleanupAt = 0;
+
 function getDateKey(): string {
   const d = new Date();
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+/**
+ * 清理过期计数器，避免内存泄漏
+ * - 删除非当天的 quota 计数
+ * - 检查 rate bucket 中的 key 是否仍对应有效服务，否则删除
+ * P1-4: 仅在实际清理时（5 分钟一次）查询 DB，而非每请求查询
+ */
+function cleanupCountersIfNeeded(): void {
+  const now = Date.now();
+  if (now - lastCleanupAt < CLEANUP_INTERVAL_MS) return;
+  lastCleanupAt = now;
+
+  // 仅在清理时查询有效 API Keys
+  const allKeys = db.prepare("SELECT api_key FROM services").all() as { api_key: string }[];
+  const validApiKeys = new Set(allKeys.map((r) => r.api_key));
+
+  const todayKey = getDateKey();
+
+  // 清理过期 quota
+  for (const key of quotaCounters.keys()) {
+    const parts = key.split(":");
+    const dateKey = parts.slice(1).join("-");
+    if (dateKey !== todayKey) {
+      quotaCounters.delete(key);
+    }
+  }
+
+  // 清理已删除服务的计数器
+  for (const apiKey of rateBuckets.keys()) {
+    if (!validApiKeys.has(apiKey)) {
+      rateBuckets.delete(apiKey);
+    }
+  }
+  for (const key of quotaCounters.keys()) {
+    const apiKey = key.split(":")[0];
+    if (!validApiKeys.has(apiKey)) {
+      quotaCounters.delete(key);
+    }
+  }
 }
 
 function checkRateLimit(apiKey: string, tier: KeyTier): { ok: boolean; retryAfter?: number } {
@@ -81,6 +125,9 @@ export function requireApiKey(req: Request, res: Response, next: NextFunction): 
   }
 
   const tier = row.tier as KeyTier;
+
+  // 定期清理过期/无效计数器（内部按 5 分钟频率限流，不再每请求查 DB）
+  cleanupCountersIfNeeded();
 
   // 速率限制
   const rate = checkRateLimit(apiKey, tier);

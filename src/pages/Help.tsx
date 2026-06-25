@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Zap,
   Radio,
-  Terminal,
   Code2,
   Lightbulb,
   AlertCircle,
@@ -42,7 +41,7 @@ export default function Help() {
         actions={
           <span className="flex items-center gap-1.5 rounded-lg border border-amber/30 bg-amber/10 px-3 py-2 text-xs text-amber">
             <LifeBuoy className="h-3.5 w-3.5" />
-            v1.0 指南
+            v1.1 指南
           </span>
         }
       />
@@ -138,41 +137,41 @@ export default function Help() {
                 },
                 {
                   title: "关键词搜索",
-                  desc: "在搜索框输入关键词，按回车搜索日志内容。支持全文匹配。",
+                  desc: "在搜索框输入关键词后，需按回车键或点击「搜索」按钮才触发查询，避免每次按键都发起请求。支持全文匹配。",
                 },
                 {
                   title: "多维过滤",
-                  desc: "可按服务名、日志级别、时间范围（15分钟/1小时/6小时/24小时）组合过滤。",
+                  desc: "可按服务名、日志级别、时间范围（15分钟/1小时/6小时/24小时）组合过滤。切换级别或时间范围会自动重置到第 1 页。",
                 },
                 {
                   title: "日志详情",
-                  desc: "点击任意日志行，右侧滑出详情抽屉，展示完整消息、属性字段、JSON 原始数据，支持复制。",
+                  desc: "点击任意日志行（或用 Tab 聚焦后按 Enter/空格），右侧滑出详情抽屉，展示完整消息、属性字段、JSON 原始数据，支持复制。按 Esc 键可关闭抽屉。",
                 },
                 {
                   title: "清空实时流",
-                  desc: "在实时模式下点击「清空」按钮可清除当前显示的日志列表。",
+                  desc: "在实时模式下点击「清空」按钮可清除当前显示的日志列表。切换过滤条件时实时缓冲也会自动清空。",
                 },
               ]}
             />
             <Callout type="info" title="实时 vs 历史">
-              实时模式通过 WebSocket 推送新写入的日志（最多保留 500 条）。历史模式从数据库查询，支持分页浏览全部历史数据。
+              实时模式通过 WebSocket 推送新写入的日志（最多保留 500 条）。历史模式从数据库查询，支持分页浏览全部历史数据。切换模式时会自动清空另一方的缓冲，避免数据混淆。
             </Callout>
           </Section>
 
           {/* 数据接入 */}
           <Section id="ingest" icon={Send} title="数据接入" desc="将日志写入 LogVerse">
             <p className="text-sm text-zinc-400 leading-relaxed">
-              提供三种方式将日志写入平台：
+              提供三种方式将日志写入平台。所有写入请求均需在请求头携带 <code className="font-mono text-xs">X-API-Key</code>，可在「系统设置 → 数据源管理」中创建服务后获取。
             </p>
             <FeatureList
               items={[
                 {
                   title: "测试发送器",
-                  desc: "在页面上填写服务名、级别、消息和属性（JSON），点击「发送日志」即可写入一条日志。适合测试和调试。",
+                  desc: "在页面上填写服务名、级别、消息和属性（JSON），点击「发送日志」即可写入一条日志。适合测试和调试。需先填入有效的 API Key。",
                 },
                 {
                   title: "cURL 接入",
-                  desc: "复制页面上的 cURL 命令，在终端执行即可通过 HTTP API 写入日志。适合脚本和自动化场景。",
+                  desc: "复制页面上的 cURL 命令，在终端执行即可通过 HTTP API 写入日志。适合脚本和自动化场景。注意替换 X-API-Key 为你的服务密钥。",
                 },
                 {
                   title: "SDK 接入",
@@ -180,14 +179,18 @@ export default function Help() {
                 },
                 {
                   title: "生成模拟数据",
-                  desc: "点击右上角「生成模拟数据」按钮，一键批量生成 30 条随机日志，用于演示和测试。",
+                  desc: "点击右上角「生成模拟数据」按钮，一键批量生成 30 条随机日志，用于演示和测试。该接口需 ENABLE_SEED=true 且管理员令牌鉴权。",
                 },
               ]}
             />
+            <Callout type="info" title="API Key 等级与配额">
+              不同等级的 API Key 享有不同配额：FREE（60 次/分，10,000 条/天）、PRO（300 次/分，100,000 条/天）、ENTERPRISE（不限速，不限量）。超出限制的请求将被拒绝（429）。可在「系统设置」中为每个服务单独配置等级。
+            </Callout>
             <CodeBlock
-              title="最简单的接入方式"
-              code={`curl -X POST http://localhost:3001/api/logs \\
+              title="最简单的接入方式（需替换 YOUR_API_KEY）"
+              code={`curl -X POST http://localhost:1001/api/logs \\
   -H "Content-Type: application/json" \\
+  -H "X-API-Key: YOUR_API_KEY" \\
   -d '{
     "service": "my-app",
     "level": "INFO",
@@ -202,37 +205,67 @@ export default function Help() {
               items={[
                 {
                   title: "数据源管理",
-                  desc: "添加、删除日志来源服务。每个服务会生成唯一的 API Key，用于接入认证。",
+                  desc: "添加、删除日志来源服务。每个服务会生成唯一的 API Key，用于接入认证。添加时需选择密钥等级（FREE/PRO/ENTERPRISE），不同等级享有不同的速率限制与每日配额。服务名不可重复，重名会返回 409 提示。删除服务会级联删除其所有历史日志，操作前会二次确认。每行右侧「切换等级」下拉可随时调整服务的密钥等级。",
+                },
+                {
+                  title: "API 密钥等级",
+                  desc: "三档等级：FREE（60 次/分，10,000 条/天）、PRO（300 次/分，100,000 条/天）、ENTERPRISE（不限速，不限量）。等级越高配额越宽裕，可根据服务重要性灵活分配。",
                 },
                 {
                   title: "数据保留策略",
-                  desc: "通过滑块设置日志保留天数（1-365 天），超过保留期的日志将被自动清理。",
+                  desc: "通过滑块设置日志保留天数（1-365 天），超过保留期的日志将被自动清理（每小时检查一次）。缩短保留天数后会立即触发一次清理，无需等待下个周期。也可点击「立即清理」按钮手动执行。",
                 },
                 {
                   title: "系统信息",
-                  desc: "查看当前版本、运行模式、数据库类型、端口等系统信息。",
+                  desc: "查看当前版本、运行模式、数据库类型、实时引擎等系统信息。",
                 },
               ]}
             />
+            <Callout type="warn" title="删除不可恢复">
+              删除服务会级联删除该服务的全部历史日志，且操作不可撤销。系统会弹出二次确认对话框，请仔细核对服务名后再确认。
+            </Callout>
           </Section>
 
           {/* API 参考 */}
           <Section id="api" icon={Code2} title="API 参考" desc="REST API 与 WebSocket 接口">
-            <div className="space-y-3">
-              <ApiRow method="POST" path="/api/logs" desc="写入单条日志" />
-              <ApiRow method="POST" path="/api/logs/batch" desc="批量写入日志（数组）" />
-              <ApiRow method="GET" path="/api/logs" desc="查询日志（支持 service/level/keyword/时间范围/分页）" />
-              <ApiRow method="GET" path="/api/logs/recent-errors" desc="获取最近的 ERROR/FATAL 日志" />
-              <ApiRow method="GET" path="/api/stats/overview" desc="获取总览统计数据" />
-              <ApiRow method="GET" path="/api/services" desc="获取服务列表" />
-              <ApiRow method="POST" path="/api/services" desc="添加新服务" />
-              <ApiRow method="WS" path="/ws" desc="WebSocket 实时日志流" />
+            <Callout type="info" title="认证方式">
+              接口分两类认证：日志写入类（POST /api/logs）使用 <code className="font-mono text-xs">X-API-Key</code> 请求头，值为服务创建时生成的 API Key；查询/统计/服务管理/保留策略等管理类接口使用 <code className="font-mono text-xs">X-Admin-Token</code> 请求头，值为环境变量 <code className="font-mono text-xs">ADMIN_TOKEN</code>。WebSocket 在连接 URL 的 query 参数中携带 <code className="font-mono text-xs">adminToken</code>。
+            </Callout>
+
+            <div className="mt-4 space-y-3">
+              <ApiRow method="POST" path="/api/logs" desc="写入单条日志（X-API-Key 认证）" />
+              <ApiRow method="POST" path="/api/logs/batch" desc="批量写入日志（X-API-Key 认证）" />
+              <ApiRow method="GET" path="/api/logs" desc="查询日志（X-Admin-Token，支持 service/level/keyword/时间范围/分页）" />
+              <ApiRow method="GET" path="/api/logs/recent-errors" desc="获取最近的 ERROR/FATAL 日志（X-Admin-Token）" />
+              <ApiRow method="GET" path="/api/stats/overview" desc="获取总览统计数据（X-Admin-Token）" />
+              <ApiRow method="GET" path="/api/services" desc="获取服务列表（X-Admin-Token）" />
+              <ApiRow method="POST" path="/api/services" desc="添加新服务（X-Admin-Token，重名返回 409）" />
+              <ApiRow method="DELETE" path="/api/services/:id" desc="删除服务及其日志（X-Admin-Token）" />
+              <ApiRow method="PUT" path="/api/services/:id/tier" desc="切换服务密钥等级（X-Admin-Token）" />
+              <ApiRow method="GET" path="/api/retention" desc="获取保留天数（X-Admin-Token）" />
+              <ApiRow method="PUT" path="/api/retention" desc="更新保留天数，缩短时即时触发清理（X-Admin-Token）" />
+              <ApiRow method="POST" path="/api/logs/cleanup" desc="手动触发过期日志清理（X-Admin-Token）" />
+              <ApiRow method="POST" path="/api/seed" desc="生成模拟日志（X-Admin-Token + ENABLE_SEED=true）" />
+              <ApiRow method="WS" path="/ws" desc="WebSocket 实时日志流（query 携带 adminToken）" />
             </div>
 
             <CodeBlock
-              title="查询日志示例"
-              code={`# 查询 payment-service 最近1小时的 ERROR 日志
-curl "http://localhost:3001/api/logs?service=payment-service&level=ERROR&page=1&pageSize=50"`}
+              title="写入日志示例（X-API-Key 认证）"
+              code={`curl -X POST http://localhost:1001/api/logs \\
+  -H "Content-Type: application/json" \\
+  -H "X-API-Key: YOUR_API_KEY" \\
+  -d '{
+    "service": "payment-service",
+    "level": "ERROR",
+    "message": "Database connection timeout",
+    "attributes": { "host": "prod-db-01" }
+  }'`}
+            />
+
+            <CodeBlock
+              title="查询日志示例（X-Admin-Token 认证）"
+              code={`curl "http://localhost:1001/api/logs?service=payment-service&level=ERROR&page=1&pageSize=50" \\
+  -H "X-Admin-Token: YOUR_ADMIN_TOKEN"`}
             />
 
             <div className="mt-4">
@@ -241,8 +274,8 @@ curl "http://localhost:3001/api/logs?service=payment-service&level=ERROR&page=1&
                 WebSocket 使用
               </h4>
               <CodeBlock
-                code={`// 连接 WebSocket
-const ws = new WebSocket('ws://localhost:3001/ws');
+                code={`// 连接 WebSocket（需在 query 携带管理员令牌鉴权）
+const ws = new WebSocket('ws://localhost:1001/ws?adminToken=YOUR_ADMIN_TOKEN');
 
 // 订阅日志流（可按服务/级别过滤）
 ws.onopen = () => {
@@ -289,7 +322,27 @@ ws.onmessage = (event) => {
                 },
                 {
                   q: "WebSocket 连接不上怎么办？",
-                  a: "确保后端服务（端口 3001）正在运行。如果通过 Vite 开发服务器访问，WebSocket 会通过代理转发到后端。",
+                  a: "自托管部署：确保后端服务（端口 1001）正在运行，Nginx 已配置 /ws 反代并开启 Upgrade/Connection 头。开发模式下 Vite 会自动代理 WebSocket 到后端。Vercel 等 Serverless 平台不支持长连接 WebSocket，前端会自动降级为关闭实时流，不影响查询功能。",
+                },
+                {
+                  q: "如何部署到生产环境？",
+                  a: "推荐方案：1) npm run build 生成 dist/ 静态产物；2) PM2 启动后端（pm2 start deploy/ecosystem.config.js）；3) Nginx 直接托管 dist/ 目录并反代 /api 和 /ws 到后端 1001 端口（参考 deploy/nginx.conf）。Nginx 已配置 gzip 压缩、静态资源长缓存与安全响应头。",
+                },
+                {
+                  q: "Vercel 部署后数据会丢失吗？",
+                  a: "会。Vercel 等 Serverless 平台的文件系统是临时的，每次冷启动 /tmp 目录会被重置，SQLite 数据无法持久化。Serverless 部署仅适合演示，生产环境请使用自托管部署。若必须在 Vercel 使用，请设置 DB_PATH 环境变量指向外部持久化存储。",
+                },
+                {
+                  q: "需要配置哪些环境变量？",
+                  a: "后端必需：ADMIN_TOKEN（≥32 位强随机令牌）、CORS_ORIGINS、DB_PATH（Serverless 必填）。前端必需：VITE_ADMIN_TOKEN（须与 ADMIN_TOKEN 一致）。可选：ENABLE_SEED=true（开发环境开启种子接口）、PORT（默认 1001）、NODE_ENV。完整说明见项目根目录 .env.example 文件。",
+                },
+                {
+                  q: "键盘可以操作吗？",
+                  a: "可以。日志列表行支持 Tab 聚焦，按 Enter 或空格键打开详情抽屉，按 Esc 键关闭抽屉。所有交互元素均可键盘访问，符合 WCAG AA 可访问性标准。",
+                },
+                {
+                  q: "缩短保留天数后旧日志会立即删除吗？",
+                  a: "会。调整保留策略缩短天数时，系统会异步触发一次清理任务，立即删除超出新保留期的日志，无需等待下一次定时检查。你也可以在设置页面点击「立即清理」手动执行。",
                 },
               ]}
             />
@@ -335,7 +388,7 @@ function Steps({ steps }: { steps: { title: string; desc: string }[] }) {
   return (
     <div className="space-y-3">
       {steps.map((step, i) => (
-        <div key={i} className="flex gap-4 rounded-lg border border-base-600 bg-base-700 p-4">
+        <div key={step.title} className="flex gap-4 rounded-lg border border-base-600 bg-base-700 p-4">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber/10 font-display text-sm font-bold text-amber">
             {i + 1}
           </div>
@@ -352,8 +405,8 @@ function Steps({ steps }: { steps: { title: string; desc: string }[] }) {
 function FeatureList({ items }: { items: { title: string; desc: string }[] }) {
   return (
     <div className="space-y-2">
-      {items.map((item, i) => (
-        <div key={i} className="rounded-lg border border-base-600 bg-base-700/50 px-4 py-3">
+      {items.map((item) => (
+        <div key={item.title} className="rounded-lg border border-base-600 bg-base-700/50 px-4 py-3">
           <div className="flex items-baseline gap-2">
             <span className="font-mono text-xs text-amber">▸</span>
             <h4 className="text-sm font-medium text-zinc-200">{item.title}</h4>
@@ -393,10 +446,15 @@ function Callout({
 
 function CodeBlock({ title, code }: { title?: string; code: string }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    // P2: clipboard 在非 HTTPS 或权限拒绝时会 reject，需 try/catch
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      console.error("复制失败：剪贴板不可用");
+    }
   };
   return (
     <div className="overflow-hidden rounded-lg border border-base-500">
@@ -408,7 +466,7 @@ function CodeBlock({ title, code }: { title?: string; code: string }) {
       <div className="relative bg-base-900">
         <button
           onClick={handleCopy}
-          className="absolute right-2 top-2 rounded px-2 py-1 text-xs text-zinc-600 transition-colors hover:text-amber"
+          className="absolute right-2 top-2 rounded px-2 py-1 text-xs text-zinc-400 transition-colors hover:text-amber"
         >
           {copied ? "已复制" : "复制"}
         </button>
@@ -431,7 +489,7 @@ function ApiRow({ method, path, desc }: { method: string; path: string; desc: st
         {method}
       </span>
       <code className="font-mono text-xs text-zinc-300">{path}</code>
-      <span className="ml-auto text-xs text-zinc-600">{desc}</span>
+      <span className="ml-auto text-xs text-zinc-400">{desc}</span>
     </div>
   );
 }
@@ -441,7 +499,7 @@ function FaqList({ items }: { items: { q: string; a: string }[] }) {
   return (
     <div className="space-y-2">
       {items.map((item, i) => (
-        <div key={i} className="overflow-hidden rounded-lg border border-base-600 bg-base-700">
+        <div key={item.q} className="overflow-hidden rounded-lg border border-base-600 bg-base-700">
           <button
             onClick={() => setOpen(open === i ? null : i)}
             className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-base-600/50"

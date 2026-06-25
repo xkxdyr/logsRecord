@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { LogEntry } from "../../shared/types";
 import { LevelBadge } from "./LevelBadge";
 import { X, Copy, Hash, Server, Clock, FileText } from "lucide-react";
@@ -8,11 +9,33 @@ interface LogDetailDrawerProps {
   onClose: () => void;
 }
 
+// P2: 统一日期格式化，防御无效时间戳
+function formatDateTime(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "时间无效";
+  return d.toLocaleString("zh-CN");
+}
+
 export function LogDetailDrawer({ log, onClose }: LogDetailDrawerProps) {
+  // P2 a11y: ESC 键关闭抽屉
+  useEffect(() => {
+    if (!log) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [log, onClose]);
+
   if (!log) return null;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(JSON.stringify(log, null, 2));
+  const handleCopy = async () => {
+    // P2: clipboard 在非 HTTPS 或权限拒绝时会 reject，需 try/catch
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(log, null, 2));
+    } catch {
+      console.error("复制失败：剪贴板不可用");
+    }
   };
 
   return (
@@ -21,14 +44,21 @@ export function LogDetailDrawer({ log, onClose }: LogDetailDrawerProps) {
       <div
         className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
+        aria-hidden="true"
       />
       {/* 抽屉 */}
-      <div className="fixed right-0 top-0 z-50 h-full w-full max-w-lg border-l border-base-500 bg-base-800 shadow-2xl animate-slide-in overflow-y-auto">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="日志详情"
+        className="fixed right-0 top-0 z-50 h-full w-full max-w-lg border-l border-base-500 bg-base-800 shadow-2xl animate-slide-in overflow-y-auto"
+      >
         {/* 头部 */}
         <div className="sticky top-0 flex items-center justify-between border-b border-base-500 bg-base-800/95 px-5 py-4 backdrop-blur">
           <h3 className="font-display text-lg font-semibold text-white">日志详情</h3>
           <button
             onClick={onClose}
+            aria-label="关闭"
             className="rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-base-600 hover:text-white"
           >
             <X className="h-5 w-5" />
@@ -48,7 +78,7 @@ export function LogDetailDrawer({ log, onClose }: LogDetailDrawerProps) {
               <InfoItem
                 icon={<Clock className="h-3.5 w-3.5" />}
                 label="时间"
-                value={new Date(log.timestamp).toLocaleString("zh-CN")}
+                value={formatDateTime(log.timestamp)}
               />
               <InfoItem icon={<FileText className="h-3.5 w-3.5" />} label="ID" value={log.id} mono />
             </div>
@@ -113,7 +143,7 @@ function InfoItem({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="flex items-center gap-1 text-xs text-zinc-600">
+      <span className="flex items-center gap-1 text-xs text-zinc-400">
         {icon} {label}
       </span>
       <span className={cn("text-zinc-200 truncate", mono && "font-mono text-xs")}>{value}</span>

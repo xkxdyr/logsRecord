@@ -23,7 +23,7 @@ export function Sidebar() {
         </div>
         <div>
           <h1 className="font-display text-lg font-bold leading-none text-white">LogVerse</h1>
-          <p className="mt-0.5 text-[10px] uppercase tracking-widest text-zinc-600">
+          <p className="mt-0.5 text-[10px] uppercase tracking-widest text-zinc-400">
             智能日志宇宙
           </p>
         </div>
@@ -53,7 +53,7 @@ export function Sidebar() {
                 />
                 <div className="flex flex-col">
                   <span className="text-sm font-medium leading-none">{item.label}</span>
-                  <span className="mt-0.5 text-[10px] uppercase tracking-wider text-zinc-600">
+                  <span className="mt-0.5 text-[10px] uppercase tracking-wider text-zinc-400">
                     {item.desc}
                   </span>
                 </div>
@@ -68,7 +68,7 @@ export function Sidebar() {
         <div className="flex items-center gap-2 rounded-lg bg-base-700 px-3 py-2">
           <div className="h-2 w-2 rounded-full bg-teal animate-pulse" />
           <span className="text-xs text-zinc-400">系统运行中</span>
-          <span className="ml-auto font-mono text-[10px] text-zinc-600">v1.0.0</span>
+          <span className="ml-auto font-mono text-[10px] text-zinc-400">v1.0.0</span>
         </div>
       </div>
     </aside>

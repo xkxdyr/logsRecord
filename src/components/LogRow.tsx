@@ -10,6 +10,8 @@ interface LogRowProps {
 
 function formatTime(ts: string): string {
   const d = new Date(ts);
+  // P2: 防御无效时间戳，避免输出 "NaN:NaN:NaN.NaN"
+  if (isNaN(d.getTime())) return "--:--:--.---";
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
   const ss = String(d.getSeconds()).padStart(2, "0");
@@ -21,15 +23,24 @@ export function LogRow({ log, onClick, isSelected }: LogRowProps) {
   return (
     <div
       onClick={() => onClick?.(log)}
+      // P2 a11y: 可点击 div 需要键盘可访问，屏幕阅读器识别为按钮
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.(log);
+        }
+      }}
       className={cn(
         "group flex items-stretch gap-0 border-b border-base-800 px-3 py-2 cursor-pointer transition-colors",
-        "hover:bg-base-600/50",
+        "hover:bg-base-600/50 focus:outline-none focus:bg-base-600/50",
         isSelected && "bg-base-600",
       )}
     >
       <LevelBar level={log.level} />
       <div className="flex flex-1 items-center gap-3 overflow-hidden pl-3">
-        <span className="shrink-0 font-mono text-xs text-zinc-600 tabular-nums">
+        <span className="shrink-0 font-mono text-xs text-zinc-400 tabular-nums">
           {formatTime(log.timestamp)}
         </span>
         <LevelBadge level={log.level} />

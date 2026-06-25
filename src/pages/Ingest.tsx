@@ -6,7 +6,12 @@ import type { LogLevel } from "../../shared/types";
 import { LEVELS } from "../../shared/types";
 import { cn } from "@/lib/utils";
 
-const CURL_EXAMPLE = `curl -X POST http://localhost:3001/api/logs \\
+// 接入示例的 base URL 跟随当前站点 origin：
+//   - 本地开发：浏览器看到 http://localhost:5173（Vite 代理转发到 1001）
+//   - 生产部署：用户看到实际域名，如 https://log.example.com
+const API_ORIGIN = typeof window !== "undefined" ? window.location.origin : "http://localhost:1001";
+
+const CURL_EXAMPLE = `curl -X POST ${API_ORIGIN}/api/logs \\
   -H "Content-Type: application/json" \\
   -H "X-API-Key: YOUR_API_KEY" \\
   -d '{
@@ -22,7 +27,7 @@ const CURL_EXAMPLE = `curl -X POST http://localhost:3001/api/logs \\
 const SDK_EXAMPLE = `import { LogVerse } from '@logverse/sdk';
 
 const logger = new LogVerse({
-  endpoint: 'http://localhost:3001',
+  endpoint: '${API_ORIGIN}',
   service: 'payment-service',
   apiKey: 'YOUR_API_KEY',   // 必填
 });
@@ -84,10 +89,15 @@ export default function Ingest() {
     }
   };
 
-  const copy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(key);
-    setTimeout(() => setCopied(null), 2000);
+  const copy = async (text: string, key: string) => {
+    // P2: clipboard 在非 HTTPS 或权限拒绝时会 reject，需 try/catch
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      console.error("复制失败：剪贴板不可用");
+    }
   };
 
   return (
@@ -128,9 +138,10 @@ export default function Ingest() {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="粘贴在系统设置中创建服务时获取的密钥"
+                  aria-label="API Key"
                   className="w-full rounded-lg border border-base-500 bg-base-700 px-3 py-2 font-mono text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-amber/50"
                 />
-                <p className="mt-1 text-[11px] text-zinc-600">
+                <p className="mt-1 text-[11px] text-zinc-400">
                   没有密钥？前往「系统设置 → 数据源管理」创建服务获取
                 </p>
               </div>
@@ -142,6 +153,7 @@ export default function Ingest() {
                   type="text"
                   value={form.service}
                   onChange={(e) => setForm({ ...form, service: e.target.value })}
+                  aria-label="服务名"
                   className="w-full rounded-lg border border-base-500 bg-base-700 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-amber/50"
                 />
               </div>
@@ -149,10 +161,12 @@ export default function Ingest() {
               {/* 级别 */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-zinc-500">级别</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="日志级别">
                   {LEVELS.map((l) => (
                     <button
                       key={l}
+                      role="radio"
+                      aria-checked={form.level === l}
                       onClick={() => setForm({ ...form, level: l })}
                       className={cn(
                         "rounded-lg border px-3 py-1.5 font-mono text-xs uppercase transition-colors",
@@ -174,6 +188,7 @@ export default function Ingest() {
                   value={form.message}
                   onChange={(e) => setForm({ ...form, message: e.target.value })}
                   rows={3}
+                  aria-label="日志消息"
                   className="w-full rounded-lg border border-base-500 bg-base-700 px-3 py-2 font-mono text-sm text-zinc-200 outline-none focus:border-amber/50 resize-none"
                 />
               </div>
@@ -187,6 +202,7 @@ export default function Ingest() {
                   value={attrsText}
                   onChange={(e) => setAttrsText(e.target.value)}
                   rows={3}
+                  aria-label="属性 JSON"
                   className="w-full rounded-lg border border-base-500 bg-base-700 px-3 py-2 font-mono text-xs text-zinc-200 outline-none focus:border-amber/50 resize-none"
                 />
               </div>
@@ -289,7 +305,7 @@ function Endpoint({ method, path, desc }: { method: string; path: string; desc: 
         {method}
       </span>
       <code className="font-mono text-xs text-zinc-300">{path}</code>
-      <span className="ml-auto text-xs text-zinc-600">{desc}</span>
+      <span className="ml-auto text-xs text-zinc-400">{desc}</span>
     </div>
   );
 }

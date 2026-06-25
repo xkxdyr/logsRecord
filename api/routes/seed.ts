@@ -1,11 +1,19 @@
 /**
  * Seed route - generates realistic mock logs for demo purposes.
+ * 双重保护：
+ *   1. requireAdmin 中间件：必须携带管理员令牌
+ *   2. ENABLE_SEED 环境变量：显式启用，生产环境默认关闭
  */
 import { Router, type Request, type Response } from 'express';
 import { logService } from '../services/logService.js';
+import { requireAdmin } from '../middleware/adminAuth.js';
 import type { IngestLogRequest, LogLevel } from '../../shared/types.js';
 
 const router = Router();
+
+function isSeedEnabled(): boolean {
+  return process.env.ENABLE_SEED === 'true';
+}
 
 const SERVICES = [
   'payment-service',
@@ -84,25 +92,35 @@ function fillTemplate(template: MessageTemplate): MessageTemplate {
 
 /**
  * POST /api/seed - generate 50 random mock logs
+ * 需管理员令牌 + ENABLE_SEED=true 双重满足
  */
-router.post('/', (req: Request, res: Response): void => {
+router.post('/', requireAdmin, (req: Request, res: Response): void => {
+  if (!isSeedEnabled()) {
+    res.status(403).json({
+      success: false,
+      error: '种子接口已禁用，如需启用请设置环境变量 ENABLE_SEED=true',
+    });
+    return;
+  }
   try {
     const countQuery = req.query.count ? Number(req.query.count) : 50;
-    const count = Number.isFinite(countQuery) && countQuery > 0 ? countQuery : 50;
-    const results = [];
+    const count = Number.isFinite(countQuery) && countQuery > 0 ? Math.min(countQuery, 1000) : 50;
+    // P1: 改用批量写入，单事务提交，避免 N 次独立事务的网络/IO 开销
+    const payloads: IngestLogRequest[] = [];
     for (let i = 0; i < count; i++) {
       const service = pick(SERVICES);
       const template = fillTemplate(pick(MESSAGE_TEMPLATES));
-      const payload: IngestLogRequest = {
+      payloads.push({
         service,
         level: template.level,
         message: template.msg,
         attributes: template.attrs,
-      };
-      results.push(logService.ingestLog(payload));
+      });
     }
+    const results = logService.ingestBatch(payloads);
     res.status(201).json({ success: true, data: { generated: results.length } });
   } catch (err) {
+    console.error('[seed] 生成失败:', err);
     res.status(500).json({ success: false, error: 'Server internal error' });
   }
 });

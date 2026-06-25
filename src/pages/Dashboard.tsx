@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -32,35 +32,71 @@ import { LEVEL_COLORS } from "../../shared/types";
 
 const PIE_COLORS = ["#60a5fa", "#fbbf24", "#f87171", "#e879f9", "#818cf8", "#64748b"];
 
+// P2 性能：提取内联对象为模块级常量，避免每次渲染新建引用导致 Recharts 不必要重渲染
+const AREA_CHART_MARGIN = { top: 5, right: 5, bottom: 0, left: -20 };
+const BAR_CHART_MARGIN = { left: 20, right: 20 };
+const TOOLTIP_STYLE = {
+  backgroundColor: "#141416",
+  border: "1px solid #232328",
+  borderRadius: "8px",
+  fontSize: "12px",
+};
+const TOOLTIP_LABEL_STYLE = { color: "#a1a1aa" };
+const BAR_CURSOR = { fill: "#1a1a1e" };
+
 export default function Dashboard() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [recentErrors, setRecentErrors] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
-  const [liveErrorCount, setLiveErrorCount] = useState(0);
+
+  // P1-8: 用 reqId 防止 interval/handleRefresh 场景下的竞态
+  // reqId 确保只有最新请求的结果能 setState，旧请求即使返回也被丢弃
+  // 不使用 AbortController.abort()，避免 StrictMode dev 双重调用 effect 时产生 ERR_ABORTED 日志
+  const reqIdRef = useRef(0);
 
   const fetchStats = useCallback(async () => {
+    const reqId = ++reqIdRef.current;
     try {
       const [overview, errors] = await Promise.all([
         api.getOverview(),
         api.getRecentErrors(8),
       ]);
+      // 仅最新请求的结果才能 setState，避免乱序覆盖
+      if (reqId !== reqIdRef.current) return;
       setStats(overview);
-      setRecentErrors(errors);
+      // 按 id 去重合并：DB 查询结果为主，保留实时已收到但 DB 暂未返回的条目，
+      // 避免实时流与轮询双源相互覆盖或重复
+      setRecentErrors((prev) => {
+        const seen = new Set(errors.map((e) => e.id));
+        const liveOnly = prev.filter((e) => !seen.has(e.id));
+        return [...errors, ...liveOnly]
+          .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+          .slice(0, 8);
+      });
     } catch (err) {
+      if (reqId !== reqIdRef.current) return;
       console.error("Failed to fetch stats:", err);
     } finally {
-      setLoading(false);
+      if (reqId === reqIdRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
-  // 实时流 - 用于统计 live 数据
+  // 实时流 - 用于实时展示异常日志
+  // 错误总数以 stats.errorCount（数据库值）为准，实时错误会写入 DB 后被下次轮询捕获，
+  // 不再单独累加，避免双重计数
   useLogStream({
     enabled: true,
+    collectLogs: false,
     onLog: (log) => {
       if (log.level === "ERROR" || log.level === "FATAL") {
-        setLiveErrorCount((c) => c + 1);
-        setRecentErrors((prev) => [log, ...prev].slice(0, 8));
+        setRecentErrors((prev) => {
+          // 去重：避免同一 id 重复加入
+          if (prev.some((e) => e.id === log.id)) return prev;
+          return [log, ...prev].slice(0, 8);
+        });
       }
     },
   });
@@ -73,27 +109,27 @@ export default function Dashboard() {
 
   const handleRefresh = () => {
     setLoading(true);
-    setLiveErrorCount(0);
     fetchStats();
   };
 
-  const trendData = stats?.trend.map((t) => ({
+  // P2 性能：用 useMemo 避免每次渲染都重新计算并创建新数组引用
+  const trendData = useMemo(() => stats?.trend.map((t) => ({
     time: t.time.slice(11, 16),
     INFO: t.INFO,
     WARN: t.WARN,
     ERROR: t.ERROR,
     FATAL: t.FATAL,
-  })) ?? [];
+  })) ?? [], [stats?.trend]);
 
-  const pieData = stats?.levelDistribution.map((l) => ({
+  const pieData = useMemo(() => stats?.levelDistribution.map((l) => ({
     name: l.level,
     value: l.count,
-  })) ?? [];
+  })) ?? [], [stats?.levelDistribution]);
 
-  const barData = stats?.topServices.map((s) => ({
+  const barData = useMemo(() => stats?.topServices.map((s) => ({
     name: s.service,
     count: s.count,
-  })) ?? [];
+  })) ?? [], [stats?.topServices]);
 
   return (
     <Layout>
@@ -137,7 +173,7 @@ export default function Dashboard() {
           />
           <StatCard
             label="错误日志"
-            value={formatNumber((stats?.errorCount ?? 0) + liveErrorCount)}
+            value={formatNumber(stats?.errorCount ?? 0)}
             icon={<AlertTriangle className="h-5 w-5" />}
             accent="red"
             subtitle="ERROR + FATAL"
@@ -170,7 +206,7 @@ export default function Dashboard() {
               </div>
             </div>
             <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={trendData} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+              <AreaChart data={trendData} margin={AREA_CHART_MARGIN}>
                 <defs>
                   {(["INFO", "WARN", "ERROR", "FATAL"] as const).map((lvl) => (
                     <linearGradient key={lvl} id={`grad-${lvl}`} x1="0" y1="0" x2="0" y2="1">
@@ -190,13 +226,8 @@ export default function Dashboard() {
                 />
                 <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#141416",
-                    border: "1px solid #232328",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                  }}
-                  labelStyle={{ color: "#a1a1aa" }}
+                  contentStyle={TOOLTIP_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
                 />
                 {(["INFO", "WARN", "ERROR", "FATAL"] as const).map((lvl) => (
                   <Area
@@ -228,17 +259,12 @@ export default function Dashboard() {
                     paddingAngle={2}
                     dataKey="value"
                   >
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="#141416" />
+                    {pieData.map((d, i) => (
+                      <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="#141416" />
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#141416",
-                      border: "1px solid #232328",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
+                    contentStyle={TOOLTIP_STYLE}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -267,7 +293,7 @@ export default function Dashboard() {
             <h3 className="mb-4 font-display text-base font-semibold text-white">Top 服务</h3>
             {barData.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={barData} layout="vertical" margin={{ left: 20, right: 20 }}>
+                <BarChart data={barData} layout="vertical" margin={BAR_CHART_MARGIN}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#232328" horizontal={false} />
                   <XAxis type="number" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis
@@ -280,13 +306,8 @@ export default function Dashboard() {
                     width={100}
                   />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#141416",
-                      border: "1px solid #232328",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                    cursor={{ fill: "#1a1a1e" }}
+                    contentStyle={TOOLTIP_STYLE}
+                    cursor={BAR_CURSOR}
                   />
                   <Bar dataKey="count" fill="#f5a623" radius={[0, 4, 4, 0]} barSize={16} />
                 </BarChart>
@@ -311,7 +332,7 @@ export default function Dashboard() {
                   <LogRow key={log.id} log={log} onClick={setSelectedLog} />
                 ))
               ) : (
-                <div className="flex h-full items-center justify-center p-8 text-sm text-zinc-600">
+                <div className="flex h-full items-center justify-center p-8 text-sm text-zinc-400">
                   暂无异常日志
                 </div>
               )}
@@ -333,7 +354,7 @@ function formatNumber(n: number): string {
 
 function EmptyChart() {
   return (
-    <div className="flex h-[220px] items-center justify-center text-sm text-zinc-600">
+    <div className="flex h-[220px] items-center justify-center text-sm text-zinc-400">
       暂无数据
     </div>
   );

@@ -12,7 +12,7 @@ export function Layout({ children }: LayoutProps) {
       <main className="flex-1 flex flex-col overflow-hidden bg-radial-amber">
         <div className="flex-1 overflow-y-auto">{children}</div>
         <footer className="border-t border-base-600 bg-base-800/50 px-8 py-2">
-          <div className="flex items-center justify-between text-xs text-zinc-600">
+          <div className="flex items-center justify-between text-xs text-zinc-400">
             <span>LogVerse · 智能日志宇宙</span>
             <a
               href="https://beian.miit.gov.cn/"

@@ -22,9 +22,29 @@ export default function Settings() {
   const [newServiceName, setNewServiceName] = useState("");
   const [newServiceTier, setNewServiceTier] = useState<KeyTier>("free");
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
   const [retentionDays, setRetentionDays] = useState(30);
+  const [retentionSaving, setRetentionSaving] = useState(false);
+  const [retentionMsg, setRetentionMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  // P1-7: 服务管理操作（增/删/改 tier）的错误/成功反馈
+  const [mutationMsg, setMutationMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [copiedKey, setCopiedKey] = useState<number | null>(null);
   const [openTierFor, setOpenTierFor] = useState<number | null>(null);
+
+  // P1-6: 用 data-attr + closest 替代共享 ref
+  // 原实现 tierDropdownRef 在 .map 内被多个节点共享，只对最后一个服务生效
+  useEffect(() => {
+    if (openTierFor === null) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // 点击落在任意 [data-tier-dropdown] 内则不关闭（让按钮 onClick 自行处理切换）
+      if (!target.closest("[data-tier-dropdown]")) {
+        setOpenTierFor(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openTierFor]);
 
   const fetchServices = useCallback(async () => {
     try {
@@ -39,26 +59,48 @@ export default function Settings() {
 
   useEffect(() => {
     fetchServices();
+    // 加载当前保留策略
+    api
+      .getRetention()
+      .then((data) => setRetentionDays(data.retentionDays))
+      .catch((err) => console.error("Failed to fetch retention:", err));
   }, [fetchServices]);
 
+  // P1-7: 统一的 mutation 消息显示，3 秒后自动消失
+  const showMutationMsg = useCallback((type: "ok" | "err", text: string) => {
+    setMutationMsg({ type, text });
+    setTimeout(() => setMutationMsg(null), 3000);
+  }, []);
+
   const handleAdd = async () => {
-    if (!newServiceName.trim()) return;
+    if (!newServiceName.trim() || adding) return;
+    setAdding(true);
     try {
       await api.addService(newServiceName.trim(), newServiceTier);
       setNewServiceName("");
       setNewServiceTier("free");
       fetchServices();
+      showMutationMsg("ok", `服务「${newServiceName.trim()}」已添加`);
     } catch (err) {
       console.error("Failed to add service:", err);
+      showMutationMsg("err", `添加失败: ${(err as Error).message}`);
+    } finally {
+      setAdding(false);
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number, name: string) => {
+    // P1-6: 二次确认，删除服务会级联删除其所有日志，不可恢复
+    if (!window.confirm(`确认删除服务「${name}」？\n\n该操作将级联删除此服务的所有历史日志，且不可恢复。`)) {
+      return;
+    }
     try {
       await api.deleteService(id);
       fetchServices();
+      showMutationMsg("ok", `服务「${name}」已删除`);
     } catch (err) {
       console.error("Failed to delete service:", err);
+      showMutationMsg("err", `删除失败: ${(err as Error).message}`);
     }
   };
 
@@ -67,15 +109,55 @@ export default function Settings() {
       await api.updateServiceTier(id, tier);
       setOpenTierFor(null);
       fetchServices();
+      showMutationMsg("ok", `等级已切换为 ${TIER_CONFIGS[tier].label}`);
     } catch (err) {
       console.error("Failed to update tier:", err);
+      showMutationMsg("err", `等级切换失败: ${(err as Error).message}`);
     }
   };
 
-  const copyKey = (id: number, key: string) => {
-    navigator.clipboard.writeText(key);
-    setCopiedKey(id);
-    setTimeout(() => setCopiedKey(null), 2000);
+  const copyKey = async (id: number, key: string) => {
+    // P2: clipboard 在非 HTTPS 或权限拒绝时会 reject，需 try/catch
+    try {
+      await navigator.clipboard.writeText(key);
+      setCopiedKey(id);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      console.error("复制失败：剪贴板不可用");
+    }
+  };
+
+  const handleSaveRetention = async () => {
+    setRetentionSaving(true);
+    setRetentionMsg(null);
+    try {
+      await api.updateRetention(retentionDays);
+      setRetentionMsg({ type: "ok", text: `保留策略已更新为 ${retentionDays} 天` });
+    } catch (err) {
+      setRetentionMsg({ type: "err", text: "保存失败，请重试" });
+      console.error(err);
+    } finally {
+      setRetentionSaving(false);
+      setTimeout(() => setRetentionMsg(null), 3000);
+    }
+  };
+
+  const handleManualCleanup = async () => {
+    setRetentionSaving(true);
+    setRetentionMsg(null);
+    try {
+      const res = await api.triggerCleanup();
+      setRetentionMsg({
+        type: "ok",
+        text: `清理完成：已删除 ${res.deleted} 条超过 ${res.retentionDays} 天的日志`,
+      });
+    } catch (err) {
+      setRetentionMsg({ type: "err", text: "清理失败，请重试" });
+      console.error(err);
+    } finally {
+      setRetentionSaving(false);
+      setTimeout(() => setRetentionMsg(null), 4000);
+    }
   };
 
   return (
@@ -88,7 +170,7 @@ export default function Settings() {
           <div className="mb-3 flex items-center gap-2">
             <Shield className="h-4 w-4 text-amber" />
             <h3 className="font-display text-base font-semibold text-white">API 密钥等级</h3>
-            <span className="ml-auto text-xs text-zinc-600">不同等级享不同配额</span>
+            <span className="ml-auto text-xs text-zinc-400">不同等级享不同配额</span>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {TIER_LIST.map((tier) => {
@@ -140,8 +222,22 @@ export default function Settings() {
           <div className="mb-4 flex items-center gap-2">
             <Server className="h-4 w-4 text-amber" />
             <h3 className="font-display text-base font-semibold text-white">数据源管理</h3>
-            <span className="ml-auto text-xs text-zinc-600">{services.length} 个服务</span>
+            <span className="ml-auto text-xs text-zinc-400">{services.length} 个服务</span>
           </div>
+
+          {/* P1-7: mutation 操作反馈 */}
+          {mutationMsg && (
+            <div
+              className={cn(
+                "mb-4 rounded-lg border px-3 py-2 text-xs",
+                mutationMsg.type === "ok"
+                  ? "border-teal/30 bg-teal/10 text-teal"
+                  : "border-red-500/30 bg-red-500/10 text-red-400",
+              )}
+            >
+              {mutationMsg.text}
+            </div>
+          )}
 
           {/* 添加新服务 */}
           <div className="mb-4 flex flex-wrap gap-2">
@@ -151,11 +247,13 @@ export default function Settings() {
               onChange={(e) => setNewServiceName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAdd()}
               placeholder="输入服务名称，如 payment-service"
+              aria-label="服务名称"
               className="flex-1 min-w-[200px] rounded-lg border border-base-500 bg-base-700 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-amber/50"
             />
             <select
               value={newServiceTier}
               onChange={(e) => setNewServiceTier(e.target.value as KeyTier)}
+              aria-label="API 密钥等级"
               className="rounded-lg border border-base-500 bg-base-700 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-amber/50"
             >
               {TIER_LIST.map((t) => (
@@ -166,17 +264,18 @@ export default function Settings() {
             </select>
             <button
               onClick={handleAdd}
-              className="flex items-center gap-1.5 rounded-lg bg-amber px-4 py-2 text-sm font-medium text-base-900 transition-colors hover:bg-amber/90"
+              disabled={adding || !newServiceName.trim()}
+              className="flex items-center gap-1.5 rounded-lg bg-amber px-4 py-2 text-sm font-medium text-base-900 transition-colors hover:bg-amber/90 disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
-              添加
+              {adding ? "添加中..." : "添加"}
             </button>
           </div>
 
           {/* 服务列表 */}
           <div className="space-y-2">
             {loading ? (
-              <div className="py-8 text-center text-sm text-zinc-600">加载中...</div>
+              <div className="py-8 text-center text-sm text-zinc-400">加载中...</div>
             ) : services.length > 0 ? (
               services.map((svc) => {
                 const style = TIER_STYLES[svc.tier];
@@ -203,14 +302,15 @@ export default function Settings() {
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <Key className="h-3 w-3 text-zinc-600" />
-                          <code className="font-mono text-xs text-zinc-600">
+                          <Key className="h-3 w-3 text-zinc-400" />
+                          <code className="font-mono text-xs text-zinc-400">
                             {svc.apiKey.slice(0, 20)}...{svc.apiKey.slice(-4)}
                           </code>
                           <button
                             onClick={() => copyKey(svc.id, svc.apiKey)}
-                            className="ml-1 text-zinc-600 transition-colors hover:text-amber"
+                            className="ml-1 text-zinc-400 transition-colors hover:text-amber"
                             title="复制完整密钥"
+                            aria-label={copiedKey === svc.id ? "已复制" : "复制完整密钥"}
                           >
                             {copiedKey === svc.id ? (
                               <Check className="h-3 w-3 text-teal" />
@@ -220,12 +320,15 @@ export default function Settings() {
                           </button>
                         </div>
                       </div>
-                      <span className="text-xs text-zinc-600">
-                        {new Date(svc.createdAt).toLocaleDateString("zh-CN")}
+                      <span className="text-xs text-zinc-400">
+                        {(() => {
+                          const d = new Date(svc.createdAt);
+                          return isNaN(d.getTime()) ? "-" : d.toLocaleDateString("zh-CN");
+                        })()}
                       </span>
 
                       {/* 等级切换下拉 */}
-                      <div className="relative">
+                      <div className="relative" data-tier-dropdown={svc.id}>
                         <button
                           onClick={() => setOpenTierFor(isOpen ? null : svc.id)}
                           className="flex items-center gap-1 rounded-lg border border-base-500 px-2 py-1.5 text-xs text-zinc-400 transition-colors hover:border-amber/50 hover:text-amber"
@@ -254,8 +357,9 @@ export default function Settings() {
                       </div>
 
                       <button
-                        onClick={() => handleDelete(svc.id)}
-                        className="rounded-lg p-1.5 text-zinc-600 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                        onClick={() => handleDelete(svc.id, svc.name)}
+                        className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                        aria-label={`删除服务 ${svc.name}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -264,7 +368,7 @@ export default function Settings() {
                 );
               })
             ) : (
-              <div className="py-8 text-center text-sm text-zinc-600">
+              <div className="py-8 text-center text-sm text-zinc-400">
                 暂无数据源，添加一个服务开始接入日志
               </div>
             )}
@@ -291,16 +395,46 @@ export default function Settings() {
                 onChange={(e) => setRetentionDays(Number(e.target.value))}
                 className="w-full accent-amber"
               />
-              <div className="mt-1 flex justify-between text-xs text-zinc-600">
+              <div className="mt-1 flex justify-between text-xs text-zinc-400">
                 <span>1 天</span>
                 <span>30 天</span>
                 <span>90 天</span>
                 <span>365 天</span>
               </div>
             </div>
-            <p className="text-xs text-zinc-600">
-              超过保留期的日志将被自动清理。此设置将在下次清理周期生效。
+            <p className="text-xs text-zinc-400">
+              超过保留期的日志将被自动清理（每小时检查一次）。也可点击下方按钮立即清理。
             </p>
+
+            {retentionMsg && (
+              <div
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-xs",
+                  retentionMsg.type === "ok"
+                    ? "border-teal/30 bg-teal/10 text-teal"
+                    : "border-red-500/30 bg-red-500/10 text-red-400",
+                )}
+              >
+                {retentionMsg.text}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveRetention}
+                disabled={retentionSaving}
+                className="rounded-lg bg-amber px-4 py-2 text-sm font-medium text-base-900 transition-colors hover:bg-amber/90 disabled:opacity-50"
+              >
+                {retentionSaving ? "处理中..." : "保存策略"}
+              </button>
+              <button
+                onClick={handleManualCleanup}
+                disabled={retentionSaving}
+                className="rounded-lg border border-base-500 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-amber/50 hover:text-amber disabled:opacity-50"
+              >
+                立即清理
+              </button>
+            </div>
           </div>
         </div>
 
@@ -312,16 +446,14 @@ export default function Settings() {
           </div>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <InfoRow label="版本" value="LogVerse v1.0.0" />
-            <InfoRow label="运行模式" value="开发模式" />
+            <InfoRow label="运行模式" value={import.meta.env.MODE === "production" ? "生产模式" : "开发模式"} />
             <InfoRow label="数据库" value="SQLite (WAL)" />
             <InfoRow label="实时引擎" value="WebSocket" />
-            <InfoRow label="API 端口" value="3001" />
-            <InfoRow label="前端端口" value="5173" />
           </div>
         </div>
 
         {/* 合规链接 */}
-        <div className="flex justify-center gap-6 text-xs text-zinc-600">
+        <div className="flex justify-center gap-6 text-xs text-zinc-400">
           <a href="/privacy" className="transition-colors hover:text-amber">隐私政策</a>
           <span>|</span>
           <a href="/terms" className="transition-colors hover:text-amber">服务条款</a>

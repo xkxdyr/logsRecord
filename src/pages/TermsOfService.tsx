@@ -37,7 +37,7 @@ export default function TermsOfService() {
             </p>
           </div>
           <div className="border-t border-base-600 pt-6">
-            <p className="text-xs text-zinc-600">
+            <p className="text-xs text-zinc-400">
               本条款自 2026 年 6 月生效。我们可能会不定期更新本条款，请定期查看。
             </p>
           </div>

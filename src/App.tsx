@@ -9,18 +9,23 @@ import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import TermsOfService from "@/pages/TermsOfService";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
+// P2-4: 路由级 ErrorBoundary，单页崩溃不崩全站导航
+const RouteBoundary = ({ children }: { children: React.ReactNode }) => (
+  <ErrorBoundary>{children}</ErrorBoundary>
+);
+
 export default function App() {
   return (
     <ErrorBoundary>
       <Router>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/explorer" element={<Explorer />} />
-          <Route path="/ingest" element={<Ingest />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/help" element={<Help />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/" element={<RouteBoundary><Dashboard /></RouteBoundary>} />
+          <Route path="/explorer" element={<RouteBoundary><Explorer /></RouteBoundary>} />
+          <Route path="/ingest" element={<RouteBoundary><Ingest /></RouteBoundary>} />
+          <Route path="/settings" element={<RouteBoundary><Settings /></RouteBoundary>} />
+          <Route path="/help" element={<RouteBoundary><Help /></RouteBoundary>} />
+          <Route path="/privacy" element={<RouteBoundary><PrivacyPolicy /></RouteBoundary>} />
+          <Route path="/terms" element={<RouteBoundary><TermsOfService /></RouteBoundary>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
